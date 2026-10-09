@@ -1,0 +1,141 @@
+<svg viewBox="0 0 1240 520" role="img" aria-label="Процесс выпуска: исходники и методика, расчёт P&amp;L, контроли (ошибка останавливает выпуск), реестр чисел, отчёт с причинами отклонений от владельца статьи, слепая проверка скриптом и агентом (не сошлось — отчёт не уходит), остановка до «ок» человека, отправка руководителю." xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Segoe UI', Roboto, Arial, sans-serif">
+  <!-- Правится руками. Стиль — как схемы «Цикл работы»: дорожки по исполнителям, фазы сверху, цвет рамки — роль. -->
+  <style>
+    svg { --bg:#ffffff; --ink:#1d2433; --muted:#5b6475; --line:#d0d5dd; --surface:#ffffff; --lane:#f5f6f8;
+          --accent:#1a7f37; --accent-soft:#eaf5ec; --stop:#c4320a; --stop-soft:#fdebe5; --check:#2a5bd7; --check-soft:#ebf1fd; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg:#0d1117; --ink:#e6e9ef; --muted:#a3abba; --line:#3a4150; --surface:#161b22; --lane:#1c222b;
+            --accent:#3fb950; --accent-soft:#16261b; --stop:#f47067; --stop-soft:#3a1d1b; --check:#6e9bff; --check-soft:#172238; } }
+    .mono { font-family: Consolas, 'SFMono-Regular', Menlo, monospace; }
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker>
+    <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--stop)"/></marker>
+    <marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+  </defs>
+  <rect width="1240" height="520" fill="var(--bg)"/>
+
+  <!-- дорожки -->
+  <rect x="0" y="40" width="1240" height="110" fill="var(--accent-soft)"/>
+  <rect x="0" y="150" width="1240" height="120" fill="var(--lane)"/>
+  <rect x="0" y="270" width="1240" height="100" fill="var(--check-soft)"/>
+  <rect x="0" y="370" width="1240" height="96" fill="var(--lane)"/>
+  <g stroke="var(--line)" stroke-width="1">
+    <line x1="0" y1="150" x2="1240" y2="150"/><line x1="0" y1="270" x2="1240" y2="270"/>
+    <line x1="0" y1="370" x2="1240" y2="370"/><line x1="0" y1="466" x2="1240" y2="466"/>
+    <line x1="124" y1="40" x2="124" y2="466"/>
+  </g>
+  <g fill="var(--ink)" font-size="13" font-weight="600">
+    <text x="12" y="92">Человек</text>
+    <text x="12" y="206">Агент</text>
+    <text x="12" y="314">Проверяющий</text>
+    <text x="12" y="414">Руководитель</text>
+  </g>
+  <g fill="var(--muted)" font-size="11">
+    <text x="12" y="108">решения</text>
+    <text x="12" y="222">расчёт и выпуск</text>
+    <text x="12" y="330">не видит кода</text><text x="12" y="344">расчёта</text>
+    <text x="12" y="430">получатель</text>
+  </g>
+
+  <!-- фазы -->
+  <g fill="var(--muted)" font-size="11" font-weight="600" letter-spacing=".06em" text-anchor="middle">
+    <text x="192" y="24">ИСХОДНИКИ</text><text x="324" y="24">РАСЧЁТ</text><text x="456" y="24">КОНТРОЛИ</text>
+    <text x="588" y="24">РЕЕСТР</text><text x="720" y="24">ОТЧЁТ</text><text x="852" y="24">ПРОВЕРКА</text>
+    <text x="984" y="24">ДОПУСК</text><text x="1116" y="24">ОТПРАВКА</text>
+  </g>
+
+  <!-- стрелки основного потока -->
+  <g fill="none" stroke="var(--ink)" stroke-width="1.5">
+    <path d="M248 210 H264" marker-end="url(#ah)"/>
+    <path d="M380 210 H396" marker-end="url(#ah)"/>
+    <path d="M512 210 H528" marker-end="url(#ah)"/>
+    <path d="M644 210 H660" marker-end="url(#ah)"/>
+    <path d="M776 210 H786 V320 H792" marker-end="url(#ah)"/>
+    <path d="M908 320 H918 V95 H924" marker-end="url(#ah)"/>
+    <path d="M1040 95 H1050 V415 H1056" marker-end="url(#ah)"/>
+  </g>
+  <!-- решения человека входят в расчёт и отчёт -->
+  <g fill="none" stroke="var(--accent)" stroke-width="1.5">
+    <path d="M248 95 H324 V180" marker-end="url(#aha)"/>
+    <path d="M720 121 V180" marker-end="url(#aha)"/>
+    <path d="M192 69 V60 H852 V290" stroke-dasharray="2 4" marker-end="url(#aha)"/>
+  </g>
+  <!-- возвраты -->
+  <g fill="none" stroke="var(--stop)" stroke-width="1.5" stroke-dasharray="5 4">
+    <path d="M456 236 V256 H324 V240" marker-end="url(#ahs)"/>
+    <path d="M852 346 V358 H720 V240" marker-end="url(#ahs)"/>
+  </g>
+  <g font-size="11" fill="var(--muted)">
+    <text x="520" y="53" text-anchor="middle" fill="var(--accent)">методика — ТЗ и для расчёта, и для проверки</text>
+    <text x="390" y="266" text-anchor="middle" fill="var(--stop)">ошибка — выпуск остановлен</text>
+    <text x="786" y="384" text-anchor="middle" fill="var(--stop)">не сошлось — отчёт не уходит</text>
+  </g>
+
+  <!-- человек -->
+  <g font-size="13" text-anchor="middle">
+    <rect x="136" y="69" width="112" height="52" rx="5" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="192" y="91" font-weight="600" fill="var(--accent)">Методика</text>
+    <text x="192" y="109" font-size="11" fill="var(--muted)">что и как считать</text>
+
+    <rect x="664" y="69" width="112" height="52" rx="5" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="720" y="91" font-weight="600" fill="var(--accent)">Причины</text>
+    <text x="720" y="109" font-size="11" fill="var(--muted)">от владельца статьи</text>
+
+    <rect x="928" y="69" width="112" height="52" rx="5" fill="var(--stop-soft)" stroke="var(--stop)" stroke-width="1.5"/>
+    <text x="984" y="91" font-weight="600" fill="var(--stop)">СТОП</text>
+    <text x="984" y="109" font-size="11" fill="var(--ink)">чек-лист и «ок»</text>
+  </g>
+
+  <!-- агент -->
+  <g font-size="13" text-anchor="middle">
+    <rect x="136" y="184" width="112" height="52" rx="5" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="192" y="206" font-weight="600" fill="var(--ink)">Исходники</text>
+    <text x="192" y="224" font-size="11" fill="var(--muted)">проводки, маппинг</text>
+
+    <rect x="268" y="184" width="112" height="52" rx="5" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+    <text x="324" y="206" font-weight="600" fill="var(--ink)">P&amp;L</text>
+    <text x="324" y="224" font-size="11" fill="var(--muted)">УУ и БУ</text>
+
+    <rect x="400" y="184" width="112" height="52" rx="5" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+    <text x="456" y="206" font-weight="600" fill="var(--ink)">Контроли</text>
+    <text x="456" y="224" font-size="11" fill="var(--muted)">УУ = БУ, сверка с ГК</text>
+
+    <rect x="532" y="184" width="112" height="52" rx="5" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+    <text x="588" y="206" font-weight="600" fill="var(--ink)">Реестр чисел</text>
+    <text x="588" y="224" font-size="11" fill="var(--muted)" class="mono">registry.csv</text>
+
+    <rect x="664" y="184" width="112" height="52" rx="5" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+    <text x="720" y="206" font-weight="600" fill="var(--ink)">Отчёт</text>
+    <text x="720" y="224" font-size="11" fill="var(--muted)">HTML и Excel</text>
+  </g>
+
+  <!-- проверяющий -->
+  <g font-size="13" text-anchor="middle">
+    <rect x="796" y="294" width="112" height="52" rx="5" fill="var(--surface)" stroke="var(--check)" stroke-width="1.5"/>
+    <text x="852" y="316" font-weight="600" fill="var(--check)">Слепая проверка</text>
+    <text x="852" y="334" font-size="11" fill="var(--muted)">скрипт + агент</text>
+  </g>
+
+  <!-- руководитель -->
+  <g font-size="13" text-anchor="middle">
+    <rect x="1060" y="389" width="112" height="52" rx="5" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+    <text x="1116" y="411" font-weight="600" fill="var(--ink)">Отчёт наверх</text>
+    <text x="1116" y="429" font-size="11" fill="var(--muted)">одна страница</text>
+  </g>
+
+  <!-- легенда -->
+  <g font-size="12" fill="var(--muted)">
+    <rect x="136" y="486" width="14" height="14" rx="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+    <text x="158" y="497">делает агент</text>
+    <rect x="262" y="486" width="14" height="14" rx="3" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="284" y="497">решает человек</text>
+    <rect x="404" y="486" width="14" height="14" rx="3" fill="var(--stop-soft)" stroke="var(--stop)" stroke-width="1.5"/>
+    <text x="426" y="497">остановка до «ок»</text>
+    <rect x="560" y="486" width="14" height="14" rx="3" fill="var(--surface)" stroke="var(--check)" stroke-width="1.5"/>
+    <text x="582" y="497">независимая проверка</text>
+    <rect x="740" y="486" width="14" height="14" rx="3" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="762" y="497">исходные данные</text>
+    <text x="890" y="497" fill="var(--stop)">- - - возврат назад</text>
+  </g>
+</svg>
