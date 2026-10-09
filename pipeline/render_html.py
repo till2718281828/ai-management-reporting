@@ -14,7 +14,7 @@ import pandas as pd
 from pipeline.build_pl import MANAGEMENT_LINES
 from pipeline.numbers import format_number
 
-COMPANY = "ООО «СтальКонструкт»"
+COMPANY = "ООО «СтальКонструкт-Демо»"
 MONTHS_RU = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август",
              "сентябрь", "октябрь", "ноябрь", "декабрь"]
 MONTHS_DATIVE = ["январю", "февралю", "марту", "апрелю", "маю", "июню", "июлю", "августу",
@@ -45,8 +45,12 @@ ol.dev { padding-left:20px; } ol.dev li { margin:0 0 12px; } ol.dev .why { color
 table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
 th, td { padding:6px 10px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
 th:first-child, td:first-child { text-align:left; }
-th { color:var(--muted); font-weight:500; font-size:13px; }
-tr.sub td { font-weight:600; background:var(--panel); }
+th { color:var(--muted); font-weight:500; font-size:13px; border-bottom:2px solid var(--ink); }
+tr.art td:first-child { padding-left:26px; color:var(--ink); }
+tr.sub td { font-weight:700; color:var(--ink); background:var(--panel);
+            border-top:2px solid var(--line); border-bottom:2px solid var(--line); }
+tr.total td { font-weight:700; background:var(--panel); border-top:2px solid var(--ink);
+              border-bottom:3px double var(--ink); font-size:16px; }
 svg text { fill:var(--muted); font-size:11px; }
 .legend { color:var(--muted); font-size:13px; }
 .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 4px 0 12px; }
@@ -168,7 +172,13 @@ def _table(n: Numbers, month: str, month_ly: str, ytd: str, ytd_ly: str) -> str:
                  n.show(line, "изменение", f"{ytd} к {ytd_ly}", "mln|+"), change_pct(ytd, ytd_ly),
                  n.show(line, "значение", month_ly, "mln"), n.show(line, "значение", month, "mln"),
                  change_pct(month, month_ly)]
-        cls = ' class="sub"' if kind == "subtotal" else ""
+        # Статьи — с отступом, промежуточные итоги и выручка — жирным на подложке, чистая прибыль — двойной чертой.
+        if line == MANAGEMENT_LINES[-1][0]:
+            cls = ' class="total"'
+        elif kind == "subtotal" or line == "Выручка":
+            cls = ' class="sub"'
+        else:
+            cls = ' class="art"'
         rows.append(f"<tr{cls}><td>{html.escape(line)}</td>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
     return f'<div class="table-wrap"><table>{head}{"".join(rows)}</table></div>'
 

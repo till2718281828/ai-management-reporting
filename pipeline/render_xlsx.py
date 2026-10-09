@@ -100,7 +100,7 @@ def render_xlsx(out_dir: Path, data_dir: Path, months: list[str]) -> Path:
     last_leg = r - 1
 
     # P&L
-    pl["A1"] = "Управленческий P&L, руб. — демо-пример ООО «СтальКонструкт»"
+    pl["A1"] = "Управленческий P&L, руб. — демо-пример ООО «СтальКонструкт-Демо»"
     pl["A1"].font = Font(bold=True, size=13)
     pl.cell(3, 1, "Статья").font = BOLD
     for j, month in enumerate(months, 2):

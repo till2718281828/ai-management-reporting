@@ -88,7 +88,7 @@ def test_release_report_matches_registry(release):
     out, registry = release
     assert check_report_numbers(out / "index.html", registry) == []
     page = (out / "index.html").read_text(encoding="utf-8")
-    assert "СтальКонструкт" in page and "Отклонения сверх роста выручки" in page
+    assert "СтальКонструкт-Демо" in page and "Отклонения сверх роста выручки" in page
     assert len(report_numbers(page)) > 100
 
 
