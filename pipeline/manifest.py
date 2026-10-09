@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-SOURCES = ["journal.csv", "accounts.csv", "mapping.csv"]
+SOURCES = ["journal.csv", "accounts.csv", "mapping.csv", "commentary.csv"]
 
 
 def canonical_hash(path: Path) -> tuple[str, int]:
@@ -28,7 +28,8 @@ def build_manifest(data_dir: Path) -> dict:
     for name in SOURCES:
         sha, rows = canonical_hash(Path(data_dir) / name)
         files[name] = {"rows": rows, "sha256": sha}
-    return {"sources": files}
+    dates = pd.read_csv(Path(data_dir) / "journal.csv", dtype=str, usecols=["date"])["date"]
+    return {"sources": files, "journal_last_date": dates.max()}
 
 
 def write_manifest(data_dir: Path, out_dir: Path) -> dict:

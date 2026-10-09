@@ -40,6 +40,7 @@ def write_data(folder: Path, journal: list[tuple], mapping: list[tuple] = MAPPIN
 
     write("accounts.csv", ["code", "name", "type"], ACCOUNTS)
     write("mapping.csv", ["account", "side", "cost_item", "article"], mapping)
+    write("commentary.csv", ["article", "cause"], [])
     write("journal.csv", ["entry_id", "date", "doc", "debit", "credit", "amount", "cost_item", "description"],
           [(i, d, f"Д-{i}", dt, kt, a, ci, "") for i, (d, dt, kt, a, ci) in enumerate(journal, 1)])
     return folder

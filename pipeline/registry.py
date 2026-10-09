@@ -9,7 +9,7 @@
   measure — значение | изменение | изменение % | рентабельность % | отклонение сверх роста выручки
   unit    — ₽ (рубли с копейками) | %
   source  — исходники или расчёт из других строк реестра
-  shown_in — html (отчёт руководителю) | xlsx (помесячная книга)
+  shown_in — html (отчёт руководителю), xlsx (помесячная книга) или оба
   level   — A: пересчитано из первичных данных
 """
 from __future__ import annotations
@@ -72,11 +72,12 @@ def build_registry(mgmt: pd.DataFrame) -> pd.DataFrame:
         rows.append((indicator, measure, period, round(float(value), 2 if unit == "₽" else 1), unit,
                      source, shown_in))
 
+    per = periods(mgmt)
     for line, _ in MANAGEMENT_LINES:
         for month in mgmt.columns:
-            add(line, "значение", month, mgmt.at[line, month], "₽", SOURCE, "xlsx")
+            shown = "html, xlsx" if month in (per.month, per.month_ly) else "xlsx"
+            add(line, "значение", month, mgmt.at[line, month], "₽", SOURCE, shown)
 
-    per = periods(mgmt)
     values = {label: mgmt[months].sum(axis=1) for label, months in per.months.items()}
     comparisons = [(per.month, per.month_ly), (per.ytd, per.ytd_ly)]
 
