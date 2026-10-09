@@ -40,6 +40,11 @@ SOURCES = ["journal.csv", "accounts.csv", "mapping.csv", "commentary.csv"]
 TOL_RUB = Decimal("0.01")
 TOL_PCT = Decimal("0.05")   # реестр хранит проценты с одним знаком
 SPAN = re.compile(r'<span data-r="([^"]*)" data-f="([^"]*)">([^<]*)</span>')
+# Число в видимом тексте отчёта и то, что числом не считается (docs/methodology.md, «Отображение»).
+NUMBER = re.compile(r"[+−-]?\d[\d \u00a0\u202f]*(?:,\d+)?")
+NOT_A_NUMBER = re.compile(r"\d{4}-\d{2}(?:-\d{2})?|\b\d{1,2}М\d{4}\b|\b(?:19|20)\d{2}\b(?!,\d)"
+                          r"|\b[0-9a-f]{12,}\b|(?i:sha-?256)")
+RELEASE_FILES = ["manifest.json", "registry.csv", "index.html"]
 
 Key = tuple[str, str, str]
 
@@ -53,8 +58,9 @@ def canonical_sha(path: Path) -> str:
 
 
 def kopecks(amount: str) -> int:
-    rub, _, kop = amount.partition(".")
-    return int(rub) * 100 + int((kop + "00")[:2])
+    sign = -1 if amount.strip().startswith("-") else 1
+    rub, _, kop = amount.strip().lstrip("+-").partition(".")
+    return sign * (int(rub or 0) * 100 + int((kop + "00")[:2]))
 
 
 def monthly_pl(data: Path) -> tuple[dict[str, dict[str, int]], dict[str, int], list[str]]:
@@ -184,6 +190,10 @@ def verify(data: Path, out: Path) -> tuple[list[dict], list[str], dict]:
     issues: list[str] = []
     stats = {"sources": 0, "registry": 0, "html": 0, "months": 0}
 
+    missing = [name for name in RELEASE_FILES if not (out / name).exists()]
+    if missing:
+        return [], [f"в выпуске нет файла {name} — проверять нечего, выпуск не собран" for name in missing], stats
+
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     for name in SOURCES:
         stats["sources"] += 1
@@ -233,6 +243,12 @@ def verify(data: Path, out: Path) -> tuple[list[dict], list[str], dict]:
         shown.setdefault(key, []).append((text, text == recomputed))
         if text != recomputed:
             issues.append(f"отчёт: {describe(key)} — в отчёте {text}, по пересчёту {recomputed}")
+
+    visible = re.sub(r"<(style|script)\b.*?</\1>", " ", SPAN.sub(" ", page), flags=re.S | re.I)
+    visible = NOT_A_NUMBER.sub(" ", html.unescape(re.sub(r"<[^>]+>", " ", visible)))
+    for m in NUMBER.finditer(visible):
+        context = " ".join(visible[max(0, m.start() - 40):m.end() + 10].split())
+        issues.append(f"отчёт: число {m.group().strip()} без привязки к реестру — «…{context}…»")
 
     _, ytd, ytd_ly = period_labels(max(pl))
     reg_value = {by_id[r]: Decimal(v) for r, v in zip(registry["id"], registry["value"])}

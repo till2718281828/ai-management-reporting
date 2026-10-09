@@ -9,7 +9,7 @@ import pytest
 
 from pipeline.run import run
 from verifier.recompute import main as verify_main
-from verifier.recompute import show, verify
+from verifier.recompute import kopecks, show, verify
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,6 +51,31 @@ def test_format_not_allowed_is_caught(data_copy, tmp_path):
     (out / "index.html").write_text(page.replace(old, 'data-f="mln|abs|+">', 1), encoding="utf-8")
     _, issues, _ = verify(data_copy, out)
     assert any("методика его не допускает" in i for i in issues)
+
+
+def test_unbound_number_in_report_is_caught(data_copy, tmp_path):
+    """Число дописали в готовый отчёт без разметки — проверка ловит, хотя все размеченные числа верны."""
+    out = tmp_path / "out"
+    assert run(data_copy, out) == 0
+    page = (out / "index.html").read_text(encoding="utf-8")
+    (out / "index.html").write_text(page.replace("</main>", "<p>Выручка выросла на 9 999,9 млн ₽</p></main>"),
+                                    encoding="utf-8")
+    _, issues, _ = verify(data_copy, out)
+    assert len(issues) == 1 and "9 999,9" in issues[0]
+
+
+def test_missing_release_is_reported(data_copy, tmp_path):
+    out = tmp_path / "out"
+    out.mkdir()
+    _, issues, _ = verify(data_copy, out)
+    assert issues and all("нет файла" in i for i in issues)
+    assert verify_main(["--data", str(data_copy), "--out", str(out)]) == 1
+
+
+def test_kopecks_keeps_sign():
+    assert kopecks("-0.50") == -50
+    assert kopecks("1234.5") == 123450
+    assert kopecks("7") == 700
 
 
 def test_clean_release_passes(data_copy, tmp_path):

@@ -101,8 +101,8 @@ def _labels(registry: pd.DataFrame) -> tuple[str, str, str, str]:
     months = sorted(p for p in registry["period"].unique() if len(p) == 7 and p[4] == "-")
     month = months[-1]
     month_ly = f"{int(month[:4]) - 1}{month[4:]}"
-    ytd = next(p for p in registry["period"].unique() if p.endswith(f"М{month[:4]}"))
-    ytd_ly = next(p for p in registry["period"].unique() if p.endswith(f"М{int(month[:4]) - 1}"))
+    year, mm = int(month[:4]), int(month[5:])
+    ytd, ytd_ly = f"{mm}М{year}", f"{mm}М{year - 1}"
     return month, month_ly, ytd, ytd_ly
 
 

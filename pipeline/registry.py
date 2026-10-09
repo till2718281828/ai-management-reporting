@@ -112,15 +112,3 @@ def build_registry(mgmt: pd.DataFrame) -> pd.DataFrame:
 
 def write_registry(out_dir: Path, registry: pd.DataFrame) -> None:
     registry.to_csv(Path(out_dir) / "registry.csv", index=False, encoding="utf-8", lineterminator="\n")
-
-
-def read_registry(path: Path) -> pd.DataFrame:
-    return pd.read_csv(path, dtype={"period": str}, encoding="utf-8")
-
-
-def lookup(registry: pd.DataFrame, indicator: str, measure: str, period: str) -> float:
-    hit = registry[(registry["indicator"] == indicator) & (registry["measure"] == measure)
-                   & (registry["period"] == period)]
-    if len(hit) != 1:
-        raise KeyError(f"в реестре нет числа: {indicator} / {measure} / {period}")
-    return float(hit["value"].iloc[0])
