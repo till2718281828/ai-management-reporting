@@ -14,9 +14,9 @@ CLOSING_GROUPS = ["20", "26", "44", "90", "91"]
 def data(tmp_path_factory):
     out = tmp_path_factory.mktemp("data")
     generate(out)
-    journal = pd.read_csv(out / "journal.csv", dtype={"debit": str, "credit": str, "cost_item": str})
-    accounts = pd.read_csv(out / "accounts.csv", dtype={"code": str})
-    mapping = pd.read_csv(out / "mapping.csv", dtype={"account": str, "cost_item": str})
+    journal = pd.read_csv(out / "journal.csv", dtype={"debit": str, "credit": str, "cost_item": str}, encoding="utf-8-sig")
+    accounts = pd.read_csv(out / "accounts.csv", dtype={"code": str}, encoding="utf-8-sig")
+    mapping = pd.read_csv(out / "mapping.csv", dtype={"account": str, "cost_item": str}, encoding="utf-8-sig")
     journal["month"] = journal["date"].str[:7]
     return out, journal, accounts, mapping
 
@@ -39,7 +39,7 @@ def test_double_entry(data):
     lg = legs(journal)
     assert (lg.groupby("month")["signed"].sum().round(2) == 0).all()
     assert (journal["amount"] > 0).all()
-    raw = pd.read_csv(data[0] / "journal.csv", dtype=str)["amount"]
+    raw = pd.read_csv(data[0] / "journal.csv", dtype=str, encoding="utf-8-sig")["amount"]
     assert raw.str.fullmatch(r"\d+\.\d{2}").all()
     assert (journal["debit"] != journal["credit"]).all()
     known = set(accounts["code"])
@@ -60,6 +60,13 @@ def test_committed_data_is_fresh(data):
     repo_data = Path(__file__).resolve().parents[1] / "data"
     for name in ["journal.csv", "accounts.csv", "mapping.csv"]:
         assert (repo_data / name).read_bytes() == (out / name).read_bytes(), name
+
+
+def test_data_opens_in_excel():
+    """Исходники в UTF-8 с BOM: Excel двойным щелчком показывает кириллицу, а не квадраты."""
+    repo_data = Path(__file__).resolve().parents[1] / "data"
+    for name in ["journal.csv", "accounts.csv", "mapping.csv", "commentary.csv"]:
+        assert (repo_data / name).read_bytes().startswith(b"\xef\xbb\xbf"), name
 
 
 @pytest.mark.parametrize("sub", ["90.09", "91.09"])

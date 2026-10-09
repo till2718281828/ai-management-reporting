@@ -52,7 +52,7 @@ Key = tuple[str, str, str]
 # ---------- пересчёт ----------
 
 def canonical_sha(path: Path) -> str:
-    df = pd.read_csv(path, dtype=str, keep_default_na=False)
+    df = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
     text = df[sorted(df.columns)].to_csv(index=False, lineterminator="\n")
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -65,9 +65,9 @@ def kopecks(amount: str) -> int:
 
 def monthly_pl(data: Path) -> tuple[dict[str, dict[str, int]], dict[str, int], list[str]]:
     """{месяц: {строка: копейки}}, обороты 99 по месяцам, проблемы разноски."""
-    journal = pd.read_csv(data / "journal.csv", dtype=str, keep_default_na=False)
-    accounts = pd.read_csv(data / "accounts.csv", dtype=str, keep_default_na=False)
-    mapping = pd.read_csv(data / "mapping.csv", dtype=str, keep_default_na=False)
+    journal = pd.read_csv(data / "journal.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    accounts = pd.read_csv(data / "accounts.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    mapping = pd.read_csv(data / "mapping.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
     pl_accounts = set(accounts.loc[accounts["type"] == "pl", "code"])
     rules = {(a, s, c): art for a, s, c, art in
              zip(mapping["account"], mapping["side"], mapping["cost_item"], mapping["article"])}

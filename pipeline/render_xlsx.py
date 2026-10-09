@@ -49,8 +49,8 @@ def _month_date(month: str) -> date:
 
 
 def render_xlsx(out_dir: Path, data_dir: Path, months: list[str]) -> Path:
-    journal = pd.read_csv(Path(data_dir) / "journal.csv", dtype=str, keep_default_na=False)
-    mapping = pd.read_csv(Path(data_dir) / "mapping.csv", dtype=str, keep_default_na=False)
+    journal = pd.read_csv(Path(data_dir) / "journal.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    mapping = pd.read_csv(Path(data_dir) / "mapping.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
 
     wb = Workbook()
     how = wb.active

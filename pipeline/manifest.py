@@ -17,7 +17,7 @@ SOURCES = ["journal.csv", "accounts.csv", "mapping.csv", "commentary.csv"]
 
 def canonical_hash(path: Path) -> tuple[str, int]:
     """SHA-256 канона и число строк."""
-    df = pd.read_csv(path, dtype=str, keep_default_na=False)
+    df = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
     df = df[sorted(df.columns)]
     text = df.to_csv(index=False, lineterminator="\n")
     return hashlib.sha256(text.encode("utf-8")).hexdigest(), len(df)
@@ -28,7 +28,7 @@ def build_manifest(data_dir: Path) -> dict:
     for name in SOURCES:
         sha, rows = canonical_hash(Path(data_dir) / name)
         files[name] = {"rows": rows, "sha256": sha}
-    dates = pd.read_csv(Path(data_dir) / "journal.csv", dtype=str, usecols=["date"])["date"]
+    dates = pd.read_csv(Path(data_dir) / "journal.csv", dtype=str, usecols=["date"], encoding="utf-8-sig")["date"]
     return {"sources": files, "journal_last_date": dates.max()}
 
 

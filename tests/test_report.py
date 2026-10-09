@@ -102,7 +102,7 @@ def test_release_report_matches_registry(release):
 def test_xlsx_structure_and_text_injection(tmp_path):
     journal = [r for r in FIXTURE_JOURNAL]
     data = write_data(tmp_path / "data", journal)
-    j = pd.read_csv(data / "journal.csv", dtype=str, keep_default_na=False)
+    j = pd.read_csv(data / "journal.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
     j.loc[0, "description"] = "=HYPERLINK(\"http://example.com\")"
     j.to_csv(data / "journal.csv", index=False, lineterminator="\n")
     path = render_xlsx(tmp_path, data, ["2025-01"])

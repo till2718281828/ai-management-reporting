@@ -35,7 +35,7 @@ def run(data_dir: Path, out_dir: Path, inject_error: bool = False) -> int:
         if not errors:
             registry = build_registry(mgmt)
             write_registry(out_dir, registry)
-            commentary = pd.read_csv(data_dir / "commentary.csv", dtype=str, keep_default_na=False)
+            commentary = pd.read_csv(data_dir / "commentary.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
             html_path = render_html(out_dir, registry, commentary, manifest)
             render_xlsx(out_dir, data_dir, list(mgmt.columns))
             problems = check_report_numbers(html_path, registry)

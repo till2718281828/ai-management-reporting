@@ -102,7 +102,7 @@ def test_source_changed_after_release_is_caught(data_copy, tmp_path):
     """Исходник поправили после выпуска: не сходятся манифест и пересчёт."""
     out = tmp_path / "out"
     assert run(data_copy, out) == 0
-    journal = pd.read_csv(data_copy / "journal.csv", dtype=str, keep_default_na=False)
+    journal = pd.read_csv(data_copy / "journal.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
     first_sale = journal.index[journal["credit"] == "90.01"][0]
     journal.loc[first_sale, "amount"] = f"{Decimal(journal.loc[first_sale, 'amount']) + 1000:.2f}"
     journal.to_csv(data_copy / "journal.csv", index=False, lineterminator="\n")

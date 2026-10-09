@@ -237,7 +237,7 @@ def month_entries(led: Ledger, y: int, m: int, rng: random.Random) -> None:
 
 
 def write_csv(path: Path, header: list[str], rows: list) -> None:
-    with path.open("w", encoding="utf-8", newline="") as f:
+    with path.open("w", encoding="utf-8-sig", newline="") as f:  # BOM: Excel читает кириллицу
         w = csv.writer(f, lineterminator="\n")
         w.writerow(header)
         w.writerows(rows)
