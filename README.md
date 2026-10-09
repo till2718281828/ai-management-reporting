@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/till2718281828/ai-management-reporting/actions/workflows/ci.yml/badge.svg)](https://github.com/till2718281828/ai-management-reporting/actions/workflows/ci.yml)
 
-**[Открыть отчёт →](https://till2718281828.github.io/ai-management-reporting/)** · [Протокол проверки агентом](docs/agent-run.md) · [Методика](docs/methodology.md) · [English](#english)
+**[Открыть отчёт →](https://till2718281828.github.io/ai-management-reporting/)** · [Как проверить самому](#как-проверить-самому) · [Протокол проверки агентом](docs/agent-run.md) · [Методика](docs/methodology.md) · [English](#english)
 
 Демо на синтетических данных: из главной книги вымышленного завода собирается управленческий P&L
 для руководителя — одностраничный отчёт и Excel-книга. Каждое число проходит контроли расчёта, реестр
@@ -62,28 +62,75 @@ AI ускоряет подготовку отчётности. Но руково
 Этот репозиторий собран вместе с Claude Code по тому же циклу: план, разбор решений, исполнение по
 шагам, независимое ревью каждого шага, журнал решений. Моя часть — постановка, методика, решения и приёмка.
 
-## Попробуйте сломать
+## Как проверить самому
+
+### 1. В браузере, без установки — 2 минуты
+
+- **[Отчёт](https://till2718281828.github.io/ai-management-reporting/)** — карточки показателей, отклонения
+  с причинами, помесячный график, P&L до чистой прибыли.
+- **[Excel-книга](https://till2718281828.github.io/ai-management-reporting/report.xlsx)** — после скачивания
+  нажмите «Разрешить редактирование», иначе Excel не посчитает формулы. На листе «P&L» в ячейках формулы
+  SUMIFS по листу «Ноги», а не вписанные числа. Попробуйте на листе «Маппинг» заменить статью у строки
+  `20 · D · Ремонты` на «Прочие производственные»: ремонты обнулятся, прочие вырастут, а итоги не изменятся.
+  Поэтому ошибку в правилах разноски ловит владелец статьи, а не сверка итогов (см. «Ограничения»).
+- **[Протокол проверки агентом](docs/agent-run.md)** — как агент без подсказки нашёл подставленную ошибку.
+
+### 2. У себя — 10 минут
+
+Нужны Python 3.11+ и git. Команды для Windows (PowerShell или терминал VS Code); на Linux и macOS
+вместо `.venv\Scripts\activate` — `source .venv/bin/activate`.
 
 ```bash
-python -m pipeline.run --inject-error   # в готовый отчёт вносится одно неверное число
-python -m verifier.recompute            # проверка его находит и падает: «расхождений: 1»
-```
-
-Так выглядит ручная правка «на глаз» перед отправкой: расчёт её не видит, слепая проверка — видит.
-Сценарий прогоняется на каждом коммите в CI.
-
-## Запуск
-
-```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+git clone https://github.com/till2718281828/ai-management-reporting
+cd ai-management-reporting
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
-python -m pipeline.run          # выпуск в output/: index.html, report.xlsx, registry.csv, controls.md
-python -m verifier.recompute    # слепая проверка: output/verification.md
-python -m pytest -q             # тесты; пересчёт Excel — если установлен LibreOffice
 ```
 
-Ключ API не нужен. Проверка агентом — в Claude Code: агент `blind-verifier` из папки `.claude/`.
-Данные пересоздаются командой `python -m generator.generate`.
+**Выпуск и проверка.**
+
+```bash
+python -m pipeline.run          # → «Выпуск собран: output»
+python -m verifier.recompute    # → «Слепая проверка: расхождений 0»
+```
+
+В папке `output/` появятся отчёт `index.html`, книга `report.xlsx`, реестр чисел `registry.csv`,
+контроли `controls.md` и протокол проверки `verification.md` с вердиктом «выпуск можно отправлять».
+Ключ API не нужен.
+
+**Сломать отчёт и посмотреть, что проверка это ловит.**
+
+```bash
+python -m pipeline.run --inject-error   # → «ВНИМАНИЕ: в отчёт внесена ошибка … 619,8 → 629,8 млн ₽»
+python -m verifier.recompute            # → «расхождений 1: Чистая прибыль (значение, 9М2026) —
+                                        #    в отчёте 629,8, по пересчёту 619,8», код возврата 1
+```
+
+Так выглядит ручная правка «на глаз» перед отправкой: расчёт её не видит, слепая проверка — видит,
+а в `verification.md` вердикт «выпуск отправлять нельзя». То же самое можно сделать руками: соберите
+чистый выпуск, откройте `output/index.html` в текстовом редакторе, поменяйте любое число или допишите
+своё и снова запустите `python -m verifier.recompute` — проверка назовёт, какое число не сходится.
+
+**Тесты.**
+
+```bash
+python -m pytest -q             # → «46 passed»
+```
+
+Тест пересчёта Excel-книги выполняется, если установлен LibreOffice, иначе пропускается. Все сценарии
+выше прогоняются в CI на каждом коммите.
+
+### 3. Агентом в Claude Code
+
+Откройте склонированную папку в Claude Code, соберите выпуск с ошибкой (`python -m pipeline.run --inject-error`)
+и попросите: «вызови агента blind-verifier и проверь выпуск». Агент
+([`.claude/agents/blind-verifier.md`](.claude/agents/blind-verifier.md)) не открывает код расчёта и
+скрипт проверки, считает всё заново из проводок по [методике](docs/methodology.md) и должен найти
+искажённую карточку — сравните его ответ с [протоколом](docs/agent-run.md). Порядок выпуска целиком,
+с чек-листом приёмки, — в скилле [`management-report`](.claude/skills/management-report/SKILL.md).
+
+Синтетические данные пересоздаются командой `python -m generator.generate`.
 
 ## Что внутри
 
@@ -119,6 +166,9 @@ with no access to the calculation code.
 The agent was not told what or where; it recomputed everything from the ledger, found exactly that
 figure and confirmed all 495 registry rows and the other 157 report numbers ([protocol](docs/agent-run.md)).
 People own the methodology, the causes of variances, the acceptance checklist and the decision to send.
+
+To check it yourself, see «Как проверить самому»: the report and the Excel workbook in the browser, a local run in ten
+minutes (`--inject-error` plants a wrong number, `verifier.recompute` catches it), or the agent in Claude Code.
 
 The mechanics come from my work as CFO of a group of companies, rewritten on fictional data.
 
