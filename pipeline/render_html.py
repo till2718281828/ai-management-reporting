@@ -35,7 +35,7 @@ body { margin:0; background:var(--bg); color:var(--ink);
 main { max-width:980px; margin:0 auto; padding:28px 16px 48px; }
 h1 { font-size:24px; margin:0 0 4px; } h2 { font-size:17px; margin:32px 0 12px; }
 .sub { color:var(--muted); margin:0 0 20px; }
-.tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
+.tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap:12px; }
 .tile { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
 .tile .k { color:var(--muted); font-size:13px; } .tile .v { font-size:24px; font-weight:600; margin:4px 0; white-space:nowrap; }
 .tile .d { font-size:13px; color:var(--muted); }
