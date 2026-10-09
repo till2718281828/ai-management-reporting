@@ -210,7 +210,7 @@ def verify(data: Path, out: Path) -> tuple[list[dict], list[str], dict]:
                           f"{acc99.get(month, 0) / 100:,.2f}")
 
     exp = expected_values(pl)
-    registry = pd.read_csv(out / "registry.csv", dtype=str, keep_default_na=False)
+    registry = pd.read_csv(out / "registry.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
     seen = set()
     by_id: dict[str, Key] = {}
     for rid, ind, measure, period, value, unit in zip(registry["id"], registry["indicator"], registry["measure"],

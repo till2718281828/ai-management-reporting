@@ -28,7 +28,7 @@ def find_soffice() -> str | None:
 def release(tmp_path_factory):
     out = tmp_path_factory.mktemp("out")
     assert run(ROOT / "data", out) == 0
-    return out, pd.read_csv(out / "registry.csv", dtype={"period": str})
+    return out, pd.read_csv(out / "registry.csv", dtype={"period": str}, encoding="utf-8-sig")
 
 
 def test_format_russian():
@@ -82,6 +82,13 @@ def test_number_bound_to_wrong_row_is_caught(release, tmp_path):
     other = "R0001" if rid != "R0001" else "R0002"
     path = broken_copy(out, tmp_path, f'data-r="{rid}"', f'data-r="{other}"')
     assert any(other in p for p in check_report_numbers(path, registry))
+
+
+def test_registry_opens_in_excel(release):
+    """Реестр с BOM: Excel двойным щелчком читает его как UTF-8, а не как ANSI."""
+    out, registry = release
+    assert (out / "registry.csv").read_bytes().startswith(b"\xef\xbb\xbf")
+    assert list(registry.columns)[0] == "id"
 
 
 def test_release_report_matches_registry(release):

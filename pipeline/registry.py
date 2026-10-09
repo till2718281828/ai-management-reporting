@@ -11,6 +11,8 @@
   source  — исходники или расчёт из других строк реестра
   shown_in — html (отчёт руководителю), xlsx (помесячная книга) или оба
   level   — A: пересчитано из первичных данных
+
+Файл — UTF-8 с BOM: так Excel открывает кириллицу двойным щелчком, без мастера импорта.
 """
 from __future__ import annotations
 
@@ -111,4 +113,4 @@ def build_registry(mgmt: pd.DataFrame) -> pd.DataFrame:
 
 
 def write_registry(out_dir: Path, registry: pd.DataFrame) -> None:
-    registry.to_csv(Path(out_dir) / "registry.csv", index=False, encoding="utf-8", lineterminator="\n")
+    registry.to_csv(Path(out_dir) / "registry.csv", index=False, encoding="utf-8-sig", lineterminator="\n")

@@ -62,7 +62,7 @@ def inject_report_error(out_dir: Path) -> str:
     Чистая прибыль за нарастающий итог увеличивается на 10 млн ₽. Конвейер этого не видит;
     слепая проверка (python -m verifier.recompute) должна поймать.
     """
-    registry = pd.read_csv(out_dir / "registry.csv", dtype={"period": str})
+    registry = pd.read_csv(out_dir / "registry.csv", dtype={"period": str}, encoding="utf-8-sig")
     last = max(p for p in registry["period"] if len(p) == 7 and p[4] == "-")
     ytd = f"{int(last[5:])}М{last[:4]}"
     row = registry[(registry["indicator"] == "Чистая прибыль") & (registry["measure"] == "значение")
