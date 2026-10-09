@@ -1,8 +1,8 @@
 # Управленческая отчётность с AI-агентом и слепой проверкой
 
-[![CI](https://github.com/vladimir-lobanov/ai-management-reporting/actions/workflows/ci.yml/badge.svg)](https://github.com/vladimir-lobanov/ai-management-reporting/actions/workflows/ci.yml)
+[![CI](https://github.com/till2718281828/ai-management-reporting/actions/workflows/ci.yml/badge.svg)](https://github.com/till2718281828/ai-management-reporting/actions/workflows/ci.yml)
 
-**[Открыть отчёт →](https://vladimir-lobanov.github.io/ai-management-reporting/)** · [Протокол проверки агентом](docs/agent-run.md) · [Методика](docs/methodology.md) · [English](#english)
+**[Открыть отчёт →](https://till2718281828.github.io/ai-management-reporting/)** · [Протокол проверки агентом](docs/agent-run.md) · [Методика](docs/methodology.md) · [English](#english)
 
 Демо на синтетических данных: из главной книги вымышленного завода собирается управленческий P&L
 для руководителя — одностраничный отчёт и Excel-книга. Каждое число проходит контроли расчёта, реестр
