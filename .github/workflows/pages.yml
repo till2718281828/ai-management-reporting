@@ -31,7 +31,7 @@ jobs:
       - name: Страница
         run: |
           mkdir site
-          cp output/index.html output/report.xlsx output/verification.md output/controls.md site/
+          cp output/index.html output/report.xlsx output/registry.csv output/manifest.json output/controls.md output/verification.md site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
