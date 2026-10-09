@@ -2,6 +2,7 @@
 __pycache__/
 .pytest_cache/
 output/
+output-*/
 *.tmp
 ~$*
 .claude/settings.local.json
