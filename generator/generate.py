@@ -5,10 +5,15 @@
 
 Запуск: python -m generator.generate [папка]   — по умолчанию data/
 
-Пишет:
+Пишет в папку выпуск 1, в её подпапку reissue/ — выпуск 2 (перевыпуск за тот же отчётный месяц):
   accounts.csv  — план счетов (РСБУ, упрощённый): code, name, type (balance | pl)
   mapping.csv   — правила разноски ног проводок по статьям P&L: account, side, cost_item, article
   journal.csv   — проводки: entry_id, date, doc, debit, credit, amount, cost_item, description
+
+Выпуск 2 — тот же журнал, в который после отправки выпуска 1 попали две правки (REISSUE_*):
+поздняя проводка за прошлый месяц с доначислением налога и переклассификация одной проводки
+отчётного месяца в другую статью. Причины правок пишет человек — data/reissue/reissue_reasons.csv,
+генератор их не создаёт (как и commentary.csv).
 """
 from __future__ import annotations
 
@@ -41,6 +46,15 @@ MATERIAL_SHARE_SPIKE = {(2026, 7): 0.62}                     # подорожа�
 REPAIRS_RAMP = {(2026, 3): 1.2, (2026, 4): 1.4, (2026, 5): 1.6, (2026, 6): 1.8,
                 (2026, 7): 1.9, (2026, 8): 2.0, (2026, 9): 2.0}  # износ станочного парка
 INVENTORY_WRITEOFF = {(2026, 5): 20_000_000_00}               # списание неликвидов
+
+# Перевыпуск. Счёт за электроэнергию августа пришёл после отправки отчёта за сентябрь: расход
+# проводится в август, август закрывается заново, налог на прибыль за август пересчитывается.
+REISSUE_LATE_MONTH = (2026, 8)
+REISSUE_LATE_AMOUNT = 1_875_432_17                            # копейки
+# Закупка инструмента в сентябре была учтена как ремонт станков — первая такая проводка месяца
+# переносится в прочие производственные расходы.
+REISSUE_RECLASS = {"month": "2026-09", "debit": "20", "from": "Ремонты", "to": "Прочие производственные"}
+REISSUE_DIR = "reissue"
 
 ACCOUNTS = [
     ("02", "Амортизация основных средств", "balance"),
@@ -243,18 +257,58 @@ def write_csv(path: Path, header: list[str], rows: list) -> None:
         w.writerows(rows)
 
 
-def generate(out: Path) -> None:
-    out = Path(out)
-    out.mkdir(parents=True, exist_ok=True)
+def build_ledger() -> Ledger:
     rng = random.Random(SEED)
     led = Ledger()
     for y, m in MONTHS:
         month_entries(led, y, m, rng)
+    return led
+
+
+def apply_reissue(led: Ledger) -> None:
+    """Правки после отправки выпуска 1: поздняя проводка за прошлый месяц и переклассификация."""
+    y, m = REISSUE_LATE_MONTH
+    eom = f"{y}-{m:02d}-{calendar.monthrange(y, m)[1]:02d}"
+
+    def turnover(debit: str | None = None, credit: str | None = None) -> int:
+        return led.turnover(eom[:7], debit, credit)
+
+    base = (turnover(credit="90.01") - turnover(debit="90.03") - turnover(debit="90.02")
+            - turnover(debit="90.07") - turnover(debit="90.08")
+            + turnover(credit="91.01") - turnover(debit="91.02"))
+    late = REISSUE_LATE_AMOUNT
+    led.post(eom, "ПУ", "20", "60", late, "Энергия",
+             "Электроэнергия за август: счёт поставщика получен после отправки отчёта")
+    led.post(eom, "ЗМ", "90.02", "20", late, "", "Доп. закрытие счёта 20 после поздней проводки")
+    led.post(eom, "ЗМ", "90.09", "99", -late, "", "Финансовый результат от продаж: поправка")
+    tax_delta = round((base - late) * PROFIT_TAX / 100) - round(base * PROFIT_TAX / 100)
+    led.post(eom, "ЗМ", "99", "68.04", tax_delta, "Налог на прибыль", "Пересчёт налога на прибыль за месяц")
+
+    rc = REISSUE_RECLASS
+    rows = [r for r in led.rows if r["date"][:7] == rc["month"] and r["debit"] == rc["debit"]
+            and r["cost_item"] == rc["from"]]
+    if len(rows) < 2:
+        raise RuntimeError(f"для переклассификации части проводок их нужно не меньше двух, найдено {len(rows)}")
+    rows[0]["cost_item"] = rc["to"]
+    rows[0]["description"] = "Инструмент для станков (перенесено из ремонтов)"
+
+
+def write_release(out: Path, led: Ledger) -> None:
+    out.mkdir(parents=True, exist_ok=True)
     write_csv(out / "accounts.csv", ["code", "name", "type"], ACCOUNTS)
     write_csv(out / "mapping.csv", ["account", "side", "cost_item", "article"], MAPPING)
     cols = ["entry_id", "date", "doc", "debit", "credit", "amount", "cost_item", "description"]
     write_csv(out / "journal.csv", cols,
               [[r[c] if c != "amount" else rub(r[c]) for c in cols] for r in led.rows])
+
+
+def generate(out: Path) -> None:
+    """Выпуск 1 — в out, выпуск 2 (перевыпуск) — в out/reissue."""
+    out = Path(out)
+    write_release(out, build_ledger())
+    led = build_ledger()
+    apply_reissue(led)
+    write_release(out / REISSUE_DIR, led)
 
 
 if __name__ == "__main__":

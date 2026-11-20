@@ -109,3 +109,17 @@ def test_source_changed_after_release_is_caught(data_copy, tmp_path):
     _, issues, _ = verify(data_copy, out)
     assert any("SHA-256" in i for i in issues)
     assert any(i.startswith("реестр") for i in issues)
+
+
+@pytest.mark.parametrize("measure", ["значение", "отклонение сверх роста выручки"])
+def test_one_kopeck_in_registry_is_caught(data_copy, tmp_path, measure):
+    """Рубли сверяются точно: ошибка в одну копейку в registry.csv — расхождение (и у дробного отклонения)."""
+    out = tmp_path / "out"
+    assert run(data_copy, out) == 0
+    registry = pd.read_csv(out / "registry.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    row = registry.index[registry["measure"] == measure][0]
+    registry.loc[row, "value"] = f"{Decimal(registry.loc[row, 'value']) + Decimal('0.01'):.2f}"
+    registry.to_csv(out / "registry.csv", index=False, lineterminator="\n", encoding="utf-8-sig")
+    _, issues, _ = verify(data_copy, out)
+    rid = registry.loc[row, "id"]
+    assert [i for i in issues if i.startswith(f"реестр {rid}:")], issues

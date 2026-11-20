@@ -6,16 +6,20 @@
 
 Колонки: id, indicator, measure, period, value, unit, source, shown_in, level.
   id      — номер строки выпуска; реестры между собой сверять по ключу (indicator, measure, period)
-  measure — значение | изменение | изменение % | рентабельность % | отклонение сверх роста выручки
+  measure — значение | изменение | изменение % | рентабельность % | отклонение сверх роста выручки;
+            при перевыпуске ещё «было при отправке» и «изменение к отправке» (pipeline/reissue.py)
   unit    — ₽ (рубли с копейками) | %
-  source  — исходники или расчёт из других строк реестра
-  shown_in — html (отчёт руководителю), xlsx (помесячная книга) или оба
+  source  — исходники, расчёт из других строк реестра или реестр отправленного выпуска
+  shown_in — где число стоит на самом деле, по готовым файлам выпуска (mark_shown_in), через «, »:
+            html — выведено числом в отчёте (data-r), chart — по нему построен график отчёта
+            (data-rows), xlsx — есть в книге Excel; registry — только в реестре (справочная строка)
   level   — A: пересчитано из первичных данных
 
 Файл — UTF-8 с BOM: так Excel открывает кириллицу двойным щелчком, без мастера импорта.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import NamedTuple
 
@@ -67,36 +71,32 @@ def build_registry(mgmt: pd.DataFrame) -> pd.DataFrame:
     """
     rows: list[tuple] = []
 
-    def add(indicator: str, measure: str, period: str, value: float | None, unit: str,
-            source: str, shown_in: str) -> None:
+    def add(indicator: str, measure: str, period: str, value: float | None, unit: str, source: str) -> None:
         if value is None:
             return
-        rows.append((indicator, measure, period, round(float(value), 2 if unit == "₽" else 1), unit,
-                     source, shown_in))
+        rows.append((indicator, measure, period, round(float(value), 2 if unit == "₽" else 1), unit, source))
 
     per = periods(mgmt)
     for line, _ in MANAGEMENT_LINES:
         for month in mgmt.columns:
-            shown = "html, xlsx" if month in (per.month, per.month_ly) else "xlsx"
-            add(line, "значение", month, mgmt.at[line, month], "₽", SOURCE, shown)
+            add(line, "значение", month, mgmt.at[line, month], "₽", SOURCE)
 
     values = {label: mgmt[months].sum(axis=1) for label, months in per.months.items()}
     comparisons = [(per.month, per.month_ly), (per.ytd, per.ytd_ly)]
 
     for line, _ in MANAGEMENT_LINES:
         for label in (per.ytd, per.ytd_ly):
-            add(line, "значение", label, values[label][line], "₽", SOURCE, "html")
+            add(line, "значение", label, values[label][line], "₽", SOURCE)
         for cur, base in comparisons:
             label = f"{cur} к {base}"
-            add(line, "изменение", label, values[cur][line] - values[base][line], "₽", DERIVED, "html")
-            add(line, "изменение %", label, change_pct(values[cur][line], values[base][line]), "%",
-                DERIVED, "html")
+            add(line, "изменение", label, values[cur][line] - values[base][line], "₽", DERIVED)
+            add(line, "изменение %", label, change_pct(values[cur][line], values[base][line]), "%", DERIVED)
 
     for line in MARGIN_LINES:
         for label in (per.month, per.month_ly, per.ytd, per.ytd_ly):
             revenue = values[label]["Выручка"]
             add(line, "рентабельность %", label,
-                None if revenue == 0 else values[label][line] / revenue * 100, "%", DERIVED, "html")
+                None if revenue == 0 else values[label][line] / revenue * 100, "%", DERIVED)
 
     for cur, base in comparisons:
         if values[base]["Выручка"] == 0:
@@ -104,12 +104,28 @@ def build_registry(mgmt: pd.DataFrame) -> pd.DataFrame:
         scale = values[cur]["Выручка"] / values[base]["Выручка"]
         for article in COST_ARTICLES:
             add(article, "отклонение сверх роста выручки", f"{cur} к {base}",
-                values[cur][article] - values[base][article] * scale, "₽", DERIVED, "html")
+                values[cur][article] - values[base][article] * scale, "₽", DERIVED)
 
-    df = pd.DataFrame(rows, columns=["indicator", "measure", "period", "value", "unit", "source", "shown_in"])
+    df = pd.DataFrame(rows, columns=["indicator", "measure", "period", "value", "unit", "source"])
     df.insert(0, "id", [f"R{i:04d}" for i in range(1, len(df) + 1)])
+    df["shown_in"] = ""  # заполняет mark_shown_in по готовым файлам выпуска
     df["level"] = "A"
     return df
+
+
+def mark_shown_in(registry: pd.DataFrame, page: str, book_ids: set[str]) -> pd.DataFrame:
+    """shown_in по факту: id из разметки отчёта (data-r, data-rows графика) и из книги Excel."""
+    html_ids = set(re.findall(r'data-r="([^"]*)"', page))
+    chart_ids = set(" ".join(re.findall(r'data-rows="([^"]*)"', page)).split())
+
+    def where(rid: str) -> str:
+        tokens = [name for name, ids in (("html", html_ids), ("chart", chart_ids), ("xlsx", book_ids))
+                  if rid in ids]
+        return ", ".join(tokens) or "registry"
+
+    registry = registry.copy()
+    registry["shown_in"] = registry["id"].map(where)
+    return registry
 
 
 def write_registry(out_dir: Path, registry: pd.DataFrame) -> None:

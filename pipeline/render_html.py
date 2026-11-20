@@ -3,16 +3,25 @@
 Все числа берутся из реестра (registry.csv) — здесь ничего не считается, только выбирается и
 форматируется. Причины отклонений — из data/commentary.csv (их пишет экономист; в тексте причин
 чисел нет). Нет причины — так и написано.
+
+Каждый блок страницы обёрнут в <section data-block="…">: идентификатор — имя паспорта блока
+в passports/ (назначение, источник, формула, владелец, контроли, строки реестра).
+
+При перевыпуске первым идёт блок «Что изменилось с прошлой отправки» (reissue_changes): было, стало,
+изменение и причина — причины статей из reissue_reasons.csv (их даёт владелец статьи), у итогов —
+статьи, из-за которых они изменились. График помечает свои строки реестра атрибутом data-rows.
 """
 from __future__ import annotations
 
 import html
+import re
 from pathlib import Path
 
 import pandas as pd
 
 from pipeline.build_pl import MANAGEMENT_LINES
 from pipeline.numbers import format_number
+from pipeline.reissue import DELTA, WAS, shown_changes
 
 COMPANY = "ООО «СтальКонструкт-Демо»"
 MONTHS_RU = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август",
@@ -54,6 +63,10 @@ tr.total td { font-weight:700; background:var(--panel); border-top:2px solid var
 svg text { fill:var(--muted); font-size:11px; }
 .legend { color:var(--muted); font-size:13px; }
 .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 4px 0 12px; }
+.note { color:var(--muted); font-size:13px; margin:0 0 10px; }
+table.changes th:last-child { text-align:left; }
+table.changes td.why { white-space:normal; text-align:left; color:var(--muted); min-width:240px; }
+table.changes tr.group td { text-align:left; font-weight:600; color:var(--ink); background:var(--panel); }
 footer { margin-top:36px; color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:12px; }
 """
 
@@ -184,8 +197,12 @@ def _table(n: Numbers, month: str, month_ly: str, ytd: str, ytd_ly: str) -> str:
 
 
 def _chart(reg: pd.DataFrame) -> str:
-    """Выручка (столбики) и чистая прибыль (линия) по месяцам. Подписей-чисел нет — только форма."""
+    """Выручка (столбики) и чистая прибыль (линия) по месяцам. Подписей-чисел нет — только форма.
+
+    Строки реестра, по которым построен график, перечислены в атрибуте data-rows.
+    """
     monthly = reg[(reg["measure"] == "значение") & reg["period"].str.fullmatch(r"\d{4}-\d{2}")]
+    used = monthly[monthly["indicator"].isin(["Выручка", "Чистая прибыль"])]
     months = sorted(monthly["period"].unique())
     rev = monthly[monthly["indicator"] == "Выручка"].set_index("period")["value"]
     net = monthly[monthly["indicator"] == "Чистая прибыль"].set_index("period")["value"]
@@ -206,24 +223,76 @@ def _chart(reg: pd.DataFrame) -> str:
     years = sorted({m[:4] for m in months})
     legend = (f'<div class="legend">{" — ".join(years)}: <i style="background:var(--accent);opacity:.35"></i>'
               f'выручка <i style="background:var(--good)"></i>чистая прибыль (в увеличенном масштабе)</div>')
-    return (f'<svg viewBox="0 0 {w} {h}" width="100%" role="img" aria-label="Выручка и чистая прибыль по месяцам">'
+    return (f'<svg viewBox="0 0 {w} {h}" width="100%" role="img" aria-label="Выручка и чистая прибыль по месяцам" '
+            f'data-rows="{" ".join(used["id"])}">'
             + "".join(bars) + line + "".join(labels) + "</svg>" + legend)
 
 
-def render_html(out_dir: Path, registry: pd.DataFrame, commentary: pd.DataFrame, manifest: dict) -> Path:
+def _period_name(period: str) -> str:
+    return _month_name(period) if len(period) == 7 and period[4] == "-" else period
+
+
+def _reissue(n: Numbers, changes: pd.DataFrame, manifest: dict) -> str:
+    """Блок перевыпуска: каждое изменившееся значение — было, стало, изменение и причина."""
+    sha = manifest["previous_registry"]["sha256"][:16]
+    shown = shown_changes(changes)
+    intro = ("<p class=\"note\">Отчёт перевыпущен: после отправки в учёт попали правки. Было — из отправленного "
+             f"выпуска (реестр чисел, SHA-256 {sha}…), стало — из этого выпуска. Причину по статье дал её "
+             "владелец; итоги и нарастающий итог пересчитаны из тех же статей. Остальные изменившиеся числа "
+             "отчёта (Δ, проценты, рентабельность) — следствие этих же правок; других изменений нет — "
+             "это проверяет контроль выпуска.</p>")
+    if shown.empty:
+        return "<p>Числа совпадают с отправленным выпуском.</p>"
+    head = ("<tr><th>Показатель</th><th>Период</th><th>Было, млн ₽</th><th>Стало, млн ₽</th>"
+            "<th>Изменение, млн ₽</th><th>Причина</th></tr>")
+    rows, group = [], None
+    for r in shown.itertuples(index=False):
+        if r.primary != group:
+            group = r.primary
+            title = ("Статьи: что изменилось и почему" if r.primary
+                     else "Итоги и нарастающий итог — пересчитаны из статей выше")
+            rows.append(f'<tr class="group"><td colspan="6">{title}</td></tr>')
+        if r.primary:
+            why = f"{html.escape(r.cause)}<br>Причину дал: {html.escape(r.owner)}."
+        else:
+            names = re.sub(r"\((\d{4}-\d{2})\)", lambda m: f"({_month_name(m.group(1))})", r.basis)
+            why = f"Из-за изменения: {html.escape(names)}."
+        cells = [html.escape(r.indicator), _period_name(r.period),
+                 n.show(r.indicator, WAS, r.period, "mln"), n.show(r.indicator, "значение", r.period, "mln"),
+                 n.show(r.indicator, DELTA, r.period, "mln|+")]
+        rows.append("<tr>" + "".join(f"<td>{c}</td>" for c in cells) + f'<td class="why">{why}</td></tr>')
+    return intro + f'<div class="table-wrap"><table class="changes">{head}{"".join(rows)}</table></div>'
+
+
+def render_html(out_dir: Path, registry: pd.DataFrame, commentary: pd.DataFrame, manifest: dict,
+                changes: pd.DataFrame | None = None) -> Path:
+    """changes — таблица изменений перевыпуска (pipeline.reissue.reconcile); None — обычный выпуск."""
     month, month_ly, ytd, ytd_ly = _labels(registry)
     n = Numbers(registry)
     sha = manifest["sources"]["journal.csv"]["sha256"][:16]
+    reissue = "" if changes is None else f"""<section data-block="reissue_changes">
+<h2>Что изменилось с прошлой отправки</h2>
+{_reissue(n, changes, manifest)}
+</section>
+"""
     body = f"""<main>
 <h1>Управленческий P&amp;L · {ytd}</h1>
 <p class="sub">{COMPANY} — демо-пример на синтетических данных · отчётный месяц: {_month_name(month)}</p>
+{reissue}<section data-block="kpi_tiles">
 {_tiles(n, month, month_ly, ytd, ytd_ly)}
+</section>
+<section data-block="deviations">
 <h2>Отклонения сверх роста выручки, {ytd} к {ytd_ly}</h2>
 {_deviations(n, registry, commentary, ytd, ytd_ly)}
+</section>
+<section data-block="monthly_chart">
 <h2>Помесячная динамика</h2>
 {_chart(registry)}
+</section>
+<section data-block="pl_table">
 <h2>P&amp;L</h2>
 {_table(n, month, month_ly, ytd, ytd_ly)}
+</section>
 <footer>
 Источник: проводки по счетам РСБУ (journal.csv), разнесены по статьям правилами mapping.csv;
 SHA-256 journal.csv: {sha}…; проводки по {manifest['journal_last_date']} включительно.

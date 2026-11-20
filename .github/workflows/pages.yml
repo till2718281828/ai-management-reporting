@@ -28,10 +28,18 @@ jobs:
         run: |
           python -m pipeline.run
           python -m verifier.recompute
+      - name: Перевыпуск и его слепая проверка
+        run: |
+          python -m pipeline.run --data data/reissue --previous output --out output-v2
+          python -m verifier.recompute --data data/reissue --out output-v2 --previous output --previous-data data
+      - name: Стресс-тест слепой проверки
+        run: python -m stress.run --n 200 --seed 42 --out output-stress
       - name: Страница
         run: |
-          mkdir site
+          mkdir -p site/reissue
           cp output/index.html output/report.xlsx output/registry.csv output/manifest.json output/controls.md output/verification.md site/
+          cp output-v2/index.html output-v2/report.xlsx output-v2/registry.csv output-v2/manifest.json output-v2/controls.md output-v2/verification.md site/reissue/
+          cp output-stress/stress-test.html output-stress/stress-results.csv output-stress/stress-results.json site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

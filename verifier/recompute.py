@@ -7,9 +7,16 @@
 1. SHA-256 исходников — с манифестом выпуска;
 2. каждую строку реестра — со своим пересчётом (по ключу показатель / мера / период);
 3. каждое число отчёта HTML — со своим пересчётом, отформатированным заново;
-4. чистую прибыль каждого месяца — с оборотами счёта 99.
+4. чистую прибыль каждого месяца — с оборотами счёта 99;
+5. при перевыпуске (--previous) — блок «Что изменилось с прошлой отправки»: сама находит изменившиеся
+   значения, сравнивая свой пересчёт с реестром отправленного выпуска; «было» — из отправленного
+   реестра (это то, что ушло руководителю; его SHA-256 сверяется с манифестом), а с --previous-data
+   отправленный реестр ещё и пересчитывается из исходников выпуска 1; «стало» — свой пересчёт;
+   статья за месяц изменилась без причины или причина без изменения — расхождение.
 
-Протокол — output/verification.md. Код возврата 1, если есть хоть одно расхождение.
+    python -m verifier.recompute --data data/reissue --out output-v2 --previous output --previous-data data
+
+Протокол — <out>/verification.md. Код возврата 1, если есть хоть одно расхождение.
 """
 from __future__ import annotations
 
@@ -37,8 +44,12 @@ DEVIATION_ARTICLES = ["Материалы", "Персонал производс
                       "Коммерческие расходы", "Управленческие расходы", "Амортизация", "Проценты",
                       "Прочие доходы и расходы"]
 SOURCES = ["journal.csv", "accounts.csv", "mapping.csv", "commentary.csv"]
-TOL_RUB = Decimal("0.01")
-TOL_PCT = Decimal("0.05")   # реестр хранит проценты с одним знаком
+REASONS = "reissue_reasons.csv"       # причины перевыпуска; есть только у выпуска 2
+WAS, DELTA = "было при отправке", "изменение к отправке"
+REISSUE_SECTION = re.compile(r'<section data-block="reissue_changes">(.*?)</section>', re.S)
+MONTH = re.compile(r"\d{4}-\d{2}")
+KOPECK = Decimal("0.01")
+TOL_PCT = Decimal("0.05")   # реестр хранит проценты с одним знаком; ₽ сравниваются точно, в копейках
 SPAN = re.compile(r'<span data-r="([^"]*)" data-f="([^"]*)">([^<]*)</span>')
 # Число в видимом тексте отчёта и то, что числом не считается (docs/methodology.md, «Отображение»).
 NUMBER = re.compile(r"[+−-]?\d[\d \u00a0\u202f]*(?:,\d+)?")
@@ -113,6 +124,21 @@ def rub(kop: int) -> Decimal:
     return Decimal(kop) / 100
 
 
+def rub_equal(value: Decimal, expected: Decimal) -> bool:
+    """₽ — точно, в копейках: в реестре не больше двух знаков, и это пересчёт, округлённый до копейки.
+
+    Пересчёт сумм целочисленный, так что почти везде это просто равенство копеек. Дробным бывает только
+    отклонение сверх роста выручки; его ровно половину копейки допускается округлить в любую сторону.
+    """
+    return value == value.quantize(KOPECK) and abs(value - expected) * 100 <= Decimal("0.5")
+
+
+def matches(value: str, expected: Decimal, unit: str) -> bool:
+    if unit == "₽":
+        return rub_equal(Decimal(value), expected)
+    return abs(Decimal(value) - expected) <= TOL_PCT
+
+
 def expected_values(pl: dict[str, dict[str, int]]) -> dict[Key, Decimal]:
     """Все меры реестра по методике. ₽ — точные рубли, % — без округления."""
     month = max(pl)
@@ -161,6 +187,8 @@ def format_allowed(key: Key, fmt: str) -> bool:
         "изменение %": {"pct|+"} | ({"pct|neg|+"} if cost else set()) | ({"pct|abs"} if indicator == "Выручка" else set()),
         "рентабельность %": {"pct"},
         "отклонение сверх роста выручки": {"mln|abs"},
+        WAS: {"mln"},
+        DELTA: {"mln|+"},
     }
     return fmt in allowed.get(measure, set())
 
@@ -185,18 +213,77 @@ def show(value: Decimal, fmt: str) -> str:
 
 # ---------- сверка ----------
 
-def verify(data: Path, out: Path) -> tuple[list[dict], list[str], dict]:
-    """Вернуть (строки протокола по ключевым показателям, расхождения, статистика)."""
+def read_csv(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
+
+
+def reissue_expected(exp: dict[Key, Decimal], sent: pd.DataFrame, reasons: pd.DataFrame,
+                     previous_data: Path | None, issues: list[str]) -> tuple[dict[Key, Decimal], list[dict]]:
+    """Свой список изменений к отправленному реестру и ожидаемые строки «было» / «изменение к отправке»."""
+    sent = sent[~sent["measure"].isin([WAS, DELTA])]
+    own_month = max(p for _, _, p in exp if MONTH.fullmatch(p))
+    sent_month = max(p for p in sent["period"] if MONTH.fullmatch(p))
+    if own_month != sent_month:
+        issues.append(f"перевыпуск: отчётный месяц {own_month}, а у отправленного выпуска {sent_month} — "
+                      "сравнивать нечего")
+        return {}, []
+    prev_exp = expected_values(monthly_pl(previous_data)[0]) if previous_data is not None else None
+    changes = []
+    sent_keys = set()
+    for ind, measure, period, value, unit in zip(sent["indicator"], sent["measure"], sent["period"],
+                                                 sent["value"], sent["unit"]):
+        key = (ind, measure, period)
+        sent_keys.add(key)
+        if key not in exp:
+            issues.append(f"перевыпуск: в отправленном реестре есть {describe(key)}, в пересчёте выпуска 2 — нет")
+            continue
+        if prev_exp is not None:
+            if key not in prev_exp or not matches(value, prev_exp[key], unit):
+                issues.append(f"перевыпуск: отправленный реестр, {describe(key)} = {value} — не сходится "
+                              "с пересчётом из исходников отправленного выпуска")
+        if measure == "значение":
+            was, now = Decimal(value), exp[key]
+            if was.quantize(KOPECK) != now.quantize(KOPECK):
+                changes.append({"key": key, "was": was, "now": now})
+    for key in exp:
+        if key[1] == "значение" and key not in sent_keys:
+            issues.append(f"перевыпуск: {describe(key)} — в отправленном реестре такого числа нет")
+    extra = {}
+    for c in changes:
+        ind, _, period = c["key"]
+        extra[(ind, WAS, period)] = c["was"]
+        extra[(ind, DELTA, period)] = c["now"] - c["was"]
+    articles = {line for line, subtotal in LINES if not subtotal}
+    primary = {(c["key"][0], c["key"][2]) for c in changes
+               if c["key"][0] in articles and MONTH.fullmatch(c["key"][2])}
+    given = set(zip(reasons["article"], reasons["month"]))
+    for article, month in sorted(primary - given):
+        issues.append(f"перевыпуск: {article} ({month}) изменилась, а причины в {REASONS} нет")
+    for article, month in sorted(given - primary):
+        issues.append(f"перевыпуск: причина для {article} ({month}) есть, а статья за месяц не изменилась")
+    return extra, changes
+
+
+def verify(data: Path, out: Path, previous: Path | None = None,
+           previous_data: Path | None = None) -> tuple[list[dict], list[str], dict]:
+    """Вернуть (строки протокола по ключевым показателям, расхождения, статистика).
+
+    previous — папка или registry.csv отправленного выпуска (перевыпуск); previous_data — его исходники.
+    """
     issues: list[str] = []
-    stats = {"sources": 0, "registry": 0, "html": 0, "months": 0}
+    stats = {"sources": 0, "registry": 0, "html": 0, "months": 0, "changes": []}
 
     missing = [name for name in RELEASE_FILES if not (out / name).exists()]
     if missing:
         return [], [f"в выпуске нет файла {name} — проверять нечего, выпуск не собран" for name in missing], stats
 
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-    for name in SOURCES:
+    names = SOURCES + ([REASONS] if REASONS in manifest["sources"] or (data / REASONS).exists() else [])
+    for name in names:
         stats["sources"] += 1
+        if not (data / name).exists():
+            issues.append(f"{name}: исходник из манифеста выпуска не найден в {data}")
+            continue
         own = canonical_sha(data / name)
         if manifest["sources"].get(name, {}).get("sha256") != own:
             issues.append(f"{name}: SHA-256 исходника не совпадает с манифестом выпуска")
@@ -210,7 +297,25 @@ def verify(data: Path, out: Path) -> tuple[list[dict], list[str], dict]:
                           f"{acc99.get(month, 0) / 100:,.2f}")
 
     exp = expected_values(pl)
-    registry = pd.read_csv(out / "registry.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    registry = read_csv(out / "registry.csv")
+    reissue = previous is not None
+    reasons = (read_csv(data / REASONS) if (data / REASONS).exists()
+               else pd.DataFrame(columns=["article", "month", "owner", "cause"]))
+    if reissue:
+        prev_path = previous / "registry.csv" if previous.is_dir() else previous
+        if not prev_path.exists():
+            issues.append(f"перевыпуск: реестр отправленного выпуска не найден: {prev_path}")
+        else:
+            recorded = manifest.get("previous_registry", {}).get("sha256")
+            if recorded != canonical_sha(prev_path):
+                issues.append("перевыпуск: реестр, указанный как отправленный, не тот, с которым сверялся конвейер "
+                              "(SHA-256 не совпадает с манифестом выпуска)")
+            extra, stats["changes"] = reissue_expected(exp, read_csv(prev_path), reasons, previous_data, issues)
+            exp.update(extra)
+    elif "previous_registry" in manifest or registry["measure"].isin([WAS, DELTA]).any():
+        issues.append("выпуск — перевыпуск: укажите отправленный выпуск (--previous), иначе «было» не с чем сверить")
+    elif len(reasons):
+        issues.append(f"в данных есть {REASONS}, а выпуск собран без сверки с отправленным")
     seen = set()
     by_id: dict[str, Key] = {}
     for rid, ind, measure, period, value, unit in zip(registry["id"], registry["indicator"], registry["measure"],
@@ -219,21 +324,42 @@ def verify(data: Path, out: Path) -> tuple[list[dict], list[str], dict]:
         by_id[rid] = key
         seen.add(key)
         stats["registry"] += 1
+        if not reissue and measure in (WAS, DELTA):
+            continue  # уже отмечено выше: без отправленного выпуска «было» не проверить
         if key not in exp:
             issues.append(f"реестр {rid}: {describe(key)} — по методике такого числа нет")
             continue
-        tol = TOL_RUB if unit == "₽" else TOL_PCT
-        if abs(Decimal(value) - exp[key]) > tol:
+        if not matches(value, exp[key], unit):
             issues.append(f"реестр {rid}: {describe(key)} — в реестре {value}, по пересчёту {exp[key]:.2f}")
     for key in sorted(set(exp) - seen):
         issues.append(f"в реестре нет числа: {describe(key)}")
 
     page = (out / "index.html").read_text(encoding="utf-8")
+    section = REISSUE_SECTION.search(page)
+    if reissue and stats["changes"]:
+        id_of = {key: rid for rid, key in by_id.items()}
+        block = section.group(1) if section else ""
+        block_ids = {rid for rid, _, _ in SPAN.findall(block)}
+        if not section:
+            issues.append("отчёт: перевыпуск, а блока «Что изменилось с прошлой отправки» нет")
+        for c in stats["changes"]:
+            ind, _, period = c["key"]
+            need = [id_of.get((ind, m, period)) for m in (WAS, "значение", DELTA)]
+            if section and not all(rid in block_ids for rid in need):
+                issues.append(f"отчёт: изменение {describe(c['key'])} не показано в блоке изменений "
+                              "(было, стало и изменение)")
+        for article, month, cause in zip(reasons["article"], reasons["month"], reasons["cause"]):
+            if section and cause not in html.unescape(block):
+                issues.append(f"отчёт: причины по {article} ({month}) нет в блоке изменений")
+    elif section and not reissue:
+        issues.append("отчёт: есть блок изменений, а отправленный выпуск не указан (--previous)")
     shown: dict[Key, list[tuple[str, bool]]] = {}
     for rid, fmt, raw in SPAN.findall(page):
         stats["html"] += 1
         text = html.unescape(raw)
         key = by_id.get(rid)
+        if key is not None and not reissue and key[1] in (WAS, DELTA):
+            continue  # блок изменений без отправленного выпуска уже отмечен выше
         if key is None or key not in exp:
             issues.append(f"отчёт: число «{text}» ссылается на {rid}, которого нет в реестре")
             continue
@@ -257,7 +383,7 @@ def verify(data: Path, out: Path) -> tuple[list[dict], list[str], dict]:
         for period in (ytd, ytd_ly, max(pl)):
             key = (line, "значение", period)
             texts = list(dict.fromkeys(t for t, _ in shown.get(key, [])))
-            ok = (key in reg_value and abs(reg_value[key] - exp[key]) <= TOL_RUB
+            ok = (key in reg_value and rub_equal(reg_value[key], exp[key])
                   and all(good for _, good in shown.get(key, [])))
             summary.append({"key": key, "recomputed": exp[key], "registry": reg_value.get(key),
                             "shown": " / ".join(texts) or "—", "ok": ok})
@@ -289,6 +415,18 @@ def write_protocol(out: Path, summary: list[dict], issues: list[str], stats: dic
         indicator, _, period = row["key"]
         lines.append(f"| {indicator} | {period} | {mln_text(row['recomputed'])} | {mln_text(row['registry'])} | "
                      f"{row['shown']} | {'ОК' if row['ok'] else 'РАСХОЖДЕНИЕ'} |")
+    if stats.get("changes"):
+        lines += ["", "Перевыпуск: значения, изменившиеся к отправленному выпуску (свой пересчёт), ₽:", "",
+                  "| Показатель | Период | Было при отправке | Стало (пересчёт) | Изменение |",
+                  "|---|---|---:|---:|---:|"]
+        def rub_text(value: Decimal, plus: bool = False) -> str:
+            text = f"{abs(value):,.2f}".replace(",", " ").replace(".", ",")
+            return ("−" if value < 0 else "+" if plus and value > 0 else "") + text
+
+        for c in stats["changes"]:
+            indicator, _, period = c["key"]
+            lines.append(f"| {indicator} | {period} | {rub_text(c['was'])} | {rub_text(c['now'])} | "
+                         f"{rub_text(c['now'] - c['was'], plus=True)} |")
     lines += ["", f"**Расхождений: {len(issues)}**"]
     if issues:
         lines += [""] + [f"- {i}" for i in issues]
@@ -298,8 +436,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Слепая проверка выпуска P&L")
     parser.add_argument("--data", type=Path, default=Path("data"))
     parser.add_argument("--out", type=Path, default=Path("output"))
+    parser.add_argument("--previous", type=Path, default=None,
+                        help="перевыпуск: папка отправленного выпуска или его registry.csv")
+    parser.add_argument("--previous-data", type=Path, default=None,
+                        help="исходники отправленного выпуска: пересчитать и отправленный реестр")
     args = parser.parse_args(argv)
-    summary, issues, stats = verify(args.data, args.out)
+    summary, issues, stats = verify(args.data, args.out, args.previous, args.previous_data)
     write_protocol(args.out, summary, issues, stats)
     print(f"Слепая проверка: расхождений {len(issues)}; протокол {args.out / 'verification.md'}")
     for issue in issues[:10]:

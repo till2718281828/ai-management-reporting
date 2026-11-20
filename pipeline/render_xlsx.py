@@ -6,6 +6,9 @@
 и сверяет P&L с реестром до копейки.
 
 Тексты из данных, начинающиеся с «=», пишутся строкой, а не формулой (защита от формул-инъекций).
+
+При перевыпуске второй лист — «Изменения»: было, стало, изменение (рубли с копейками, из реестра)
+и причина; в последней колонке — id строк реестра, из которых взяты числа.
 """
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from pipeline.build_pl import MANAGEMENT_LINES
+from pipeline.reissue import DELTA, WAS, shown_changes
 
 BOLD = Font(bold=True)
 SUBTOTAL_FILL = PatternFill("solid", fgColor="EEF1F6")
@@ -35,6 +39,21 @@ HOW_TO_READ = [
     "",
     "Данные вымышлены: демо-пример на синтетической главной книге.",
 ]
+HOW_TO_READ_REISSUE = [
+    "Изменения — отчёт перевыпущен: какие числа изменились относительно отправленного выпуска,",
+    "было / стало / изменение в рублях и причина (по статье её дал владелец статьи).",
+]
+CHANGES_COLUMNS = {  # заголовок колонки листа «Изменения» → ширина
+    "Показатель": 26,
+    "Период": 10,
+    "Было при отправке, ₽": 20,
+    "Стало, ₽": 20,
+    "Изменение, ₽": 18,
+    "Причина": 90,
+    "Кто дал причину": 20,
+    "Строки реестра (было · стало · изменение)": 40,
+}
+CHANGES_HEADER = list(CHANGES_COLUMNS)
 
 
 def _text(cell, value) -> None:
@@ -48,18 +67,63 @@ def _month_date(month: str) -> date:
     return date(int(month[:4]), int(month[5:7]), 1)
 
 
-def render_xlsx(out_dir: Path, data_dir: Path, months: list[str]) -> Path:
+def changes_table(registry: pd.DataFrame, changes: pd.DataFrame) -> list[dict]:
+    """Строки листа «Изменения»: числа и их id — из реестра."""
+    rows = {(i, m, p): (rid, v) for rid, i, m, p, v in
+            zip(registry["id"], registry["indicator"], registry["measure"], registry["period"], registry["value"])}
+    table = []
+    for r in shown_changes(changes).itertuples(index=False):
+        was, now, delta = (rows[(r.indicator, m, r.period)] for m in (WAS, "значение", DELTA))
+        why = r.cause if r.primary else f"Из-за изменения: {r.basis}."
+        table.append({"indicator": r.indicator, "period": r.period, "was": was, "now": now, "delta": delta,
+                      "why": why, "owner": r.owner})
+    return table
+
+
+def book_registry_ids(registry: pd.DataFrame, changes: pd.DataFrame | None) -> set[str]:
+    """id строк реестра, числа которых есть в книге: помесячный P&L и лист «Изменения»."""
+    monthly = registry[(registry["measure"] == "значение") & registry["period"].str.fullmatch(r"\d{4}-\d{2}")]
+    ids = set(monthly["id"])
+    if changes is not None:
+        for row in changes_table(registry, changes):
+            ids |= {row["was"][0], row["now"][0], row["delta"][0]}
+    return ids
+
+
+def _changes_sheet(ws, registry: pd.DataFrame, changes: pd.DataFrame) -> None:
+    ws.append(CHANGES_HEADER)
+    for r, row in enumerate(changes_table(registry, changes), 2):
+        _text(ws.cell(r, 1), row["indicator"])
+        _text(ws.cell(r, 2), row["period"])
+        for c, key in ((3, "was"), (4, "now"), (5, "delta")):
+            ws.cell(r, c, float(row[key][1])).number_format = MONEY
+        _text(ws.cell(r, 6), row["why"])
+        _text(ws.cell(r, 7), row["owner"])
+        _text(ws.cell(r, 8), " · ".join(row[k][0] for k in ("was", "now", "delta")))
+    for k, width in enumerate(CHANGES_COLUMNS.values(), 1):
+        ws.column_dimensions[get_column_letter(k)].width = width
+    for cell in ws[1]:
+        cell.font = BOLD
+    ws.freeze_panes = "A2"
+
+
+def render_xlsx(out_dir: Path, data_dir: Path, months: list[str], registry: pd.DataFrame | None = None,
+                changes: pd.DataFrame | None = None) -> Path:
+    """registry и changes — только при перевыпуске: для листа «Изменения»."""
     journal = pd.read_csv(Path(data_dir) / "journal.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
     mapping = pd.read_csv(Path(data_dir) / "mapping.csv", dtype=str, keep_default_na=False, encoding="utf-8-sig")
 
     wb = Workbook()
     how = wb.active
     how.title = "Как читать"
-    for i, line in enumerate(HOW_TO_READ, 1):
+    reissue = changes is not None and registry is not None
+    for i, line in enumerate(HOW_TO_READ[:2] + (HOW_TO_READ_REISSUE if reissue else []) + HOW_TO_READ[2:], 1):
         _text(how.cell(i, 1), line)
     how["A1"].font = Font(bold=True, size=14)
     how.column_dimensions["A"].width = 110
 
+    if reissue:
+        _changes_sheet(wb.create_sheet("Изменения"), registry, changes)
     pl = wb.create_sheet("P&L")
     legs = wb.create_sheet("Ноги")
     src = wb.create_sheet("Проводки")

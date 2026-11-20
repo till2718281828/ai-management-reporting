@@ -28,7 +28,23 @@ jobs:
           if python -m verifier.recompute --out output-broken; then
             echo "Проверка не поймала внесённую ошибку" && exit 1
           fi
+      - name: Перевыпуск — выпуск 2 против отправленного выпуска 1
+        run: python -m pipeline.run --data data/reissue --previous output --out output-v2
+      - name: Слепая проверка перевыпуска
+        run: python -m verifier.recompute --data data/reissue --out output-v2 --previous output --previous-data data
+      - name: Изменение без причины должно остановить перевыпуск
+        run: |
+          cp -r data/reissue reissue-no-reason
+          grep -v '^Энергия,' data/reissue/reissue_reasons.csv > reissue-no-reason/reissue_reasons.csv
+          if python -m pipeline.run --data reissue-no-reason --previous output --out output-no-reason; then
+            echo "Перевыпуск прошёл без причины изменения" && exit 1
+          fi
+      - name: Стресс-тест слепой проверки, малая выборка
+        run: python -m stress.run --n 21 --seed 42 --out output-stress
       - uses: actions/upload-artifact@v4
         with:
           name: release
-          path: output/
+          path: |
+            output/
+            output-v2/
+            output-stress/
