@@ -8,7 +8,7 @@
 для руководителя — одностраничный отчёт и Excel-книга. Каждое число проходит контроли расчёта, реестр
 чисел и независимый пересчёт; AI-агент провёл ту же проверку вслепую — протокол приложен.
 
-Автор — финансовый директор; механика взята из его работы (см. [«Из практики»](#из-практики)).
+Механика взята из работы финансовой службы группы компаний (см. [«Из практики»](#из-практики)).
 
 ![Отчёт руководителю](docs/img/report.png)
 
@@ -50,7 +50,7 @@ AI ускоряет подготовку отчётности. Но руково
 
 ## Из практики
 
-Механика взята из моей работы финансовым директором группы компаний; здесь она переписана на
+Механика взята из работы финансовой службы группы компаний, которую я веду; здесь она переписана на
 вымышленных данных:
 
 - регулярный обзор для собственника, где каждое число проходит через реестр и сверяется скриптом;
@@ -178,8 +178,8 @@ People own the methodology, the causes of variances, the acceptance checklist an
 To check it yourself, see «Как проверить самому»: the report and the Excel workbook in the browser, a local run in ten
 minutes (`--inject-error` plants a wrong number, `verifier.recompute` catches it), or the agent in Claude Code.
 
-The mechanics come from my work as CFO of a group of companies, rewritten on fictional data.
+The mechanics come from the finance function of a group of companies I run, rewritten on fictional data.
 
 ---
 
-Автор — Владимир Лобанов, финансовый директор. Лицензия MIT.
+Автор — Владимир Лобанов. Лицензия MIT.
