@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from pipeline.numbers import BOUND, SPACES, format_number
+from pipeline.numbers import BOUND, NOT_NUMBERS, SPACES, format_number
 
 SECTION = re.compile(r'<section data-block="([^"]+)">')
 WAS, VALUE = "было при отправке", "значение"
@@ -108,10 +108,6 @@ class Mutation:
     page: str = field(repr=False)
     new_rid: str = ""
     new_key: tuple[str, str, str] | None = None
-
-    @property
-    def label(self) -> str:
-        return f"{TYPES[self.type]}: {VARIANTS[(self.type, self.variant)]}"
 
 
 def parse_spans(page: str) -> list[Span]:
@@ -271,7 +267,8 @@ def report_numbers(page: str) -> list[tuple[str, str, str, str]]:
     found = [("span", m.group(1), m.group(2), m.group(3)) for m in BOUND.finditer(page)]
     text = re.sub(r"<(style|script)\b.*?</\1>", " ", BOUND.sub(" ", page), flags=re.S | re.I)
     text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\d{4}-\d{2}(?:-\d{2})?|\b\d{1,2}М\d{4}\b|\b(?:19|20)\d{2}\b(?!,\d)|\b[0-9a-f]{12,}\b", " ", text)
+    for pattern in NOT_NUMBERS:  # что числом не считается — то же определение, что у конвейера
+        text = pattern.sub(" ", text)
     found += [("free", "", "", m.group().strip())
               for m in re.finditer(r"[+−-]?\d[\d   ]*(?:,\d+)?", text)]
     return found
